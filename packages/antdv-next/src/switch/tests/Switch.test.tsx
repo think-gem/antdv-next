@@ -82,6 +82,13 @@ describe('switch', () => {
     expect(wrapper.find('button').attributes('aria-checked')).toBe('true')
   })
 
+  it('modelValue should take priority over checked and value', () => {
+    const wrapper = mount(Switch, {
+      props: { modelValue: true, checked: false, value: false },
+    })
+    expect(wrapper.find('button').attributes('aria-checked')).toBe('true')
+  })
+
   // ===================== checkedValue / unCheckedValue =====================
 
   it('should support custom checkedValue and unCheckedValue', async () => {
@@ -261,6 +268,17 @@ describe('switch', () => {
     await wrapper.find('button').trigger('click')
     expect(onUpdateChecked).toHaveBeenCalledWith(true)
     expect(onUpdateValue).toHaveBeenCalledWith(true)
+  })
+
+  it('should emit update:modelValue on toggle', async () => {
+    const onUpdateModelValue = vi.fn()
+    const wrapper = mount(Switch, {
+      props: {
+        'onUpdate:modelValue': onUpdateModelValue,
+      },
+    })
+    await wrapper.find('button').trigger('click')
+    expect(onUpdateModelValue).toHaveBeenCalledWith(true)
   })
 
   // ===================== rootClass =====================

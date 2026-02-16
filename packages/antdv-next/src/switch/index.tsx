@@ -1,14 +1,14 @@
 import type { SwitchChangeEventHandler, SwitchClickEventHandler } from '@v-c/switch'
 import type { App, CSSProperties, SlotsType } from 'vue'
-import type { SemanticClassNamesType, SemanticStylesType } from '../_util/hooks'
+import type { BaseModelProps, SemanticClassNamesType, SemanticStylesType } from '../_util/hooks'
 import type { VueNode } from '../_util/type'
 import type { ComponentBaseProps } from '../config-provider/context'
 import { LoadingOutlined } from '@antdv-next/icons'
 import VcSwitch from '@v-c/switch'
 import { clsx } from '@v-c/util'
 import { omit } from 'es-toolkit'
-import { computed, defineComponent, shallowRef, watch } from 'vue'
-import { getAttrStyleAndClass, useMergeSemantic, useToArr, useToProps } from '../_util/hooks'
+import { computed, defineComponent } from 'vue'
+import { getAttrStyleAndClass, useMergeSemantic, useToArr, useToProps, useVModels } from '../_util/hooks'
 import { isValueEqual } from '../_util/isEqual'
 import { getSlotPropsFnRun, toPropsRefs } from '../_util/tools.ts'
 import Wave from '../_util/wave'
@@ -39,7 +39,7 @@ export type SwitchStylesType = SemanticStylesType<SwitchProps, SwitchSemanticSty
 
 export type CheckedValueType = string | number | boolean | object
 
-export interface SwitchProps extends ComponentBaseProps {
+export interface SwitchProps extends ComponentBaseProps, BaseModelProps {
   size?: SwitchSize
   checked?: CheckedValueType
   defaultChecked?: CheckedValueType
@@ -93,6 +93,7 @@ const keys = [
   'loading',
   'rootClass',
   'style',
+  'modelValue',
   'checked',
   'value',
   'defaultChecked',
@@ -103,6 +104,7 @@ const keys = [
   'classes',
   'checkedChildren',
   'unCheckedChildren',
+  'onUpdate:modelValue',
 ]
 
 const Switch = defineComponent<
@@ -116,20 +118,11 @@ const Switch = defineComponent<
     const mergedCheckedValue = computed(() => props.checkedValue ?? true)
     const mergedUnCheckedValue = computed(() => props.unCheckedValue ?? false)
 
-    // 获取当前值
-    const currentValue = shallowRef<CheckedValueType>(
-      props?.checked ?? props?.value ?? props?.defaultChecked ?? props?.defaultValue ?? mergedUnCheckedValue.value,
-    )
-    watch(
-      [() => props.checked, () => props.value],
-      ([newChecked, newValue]) => {
-        if (newChecked !== undefined) {
-          currentValue.value = newChecked
-        }
-        else if (newValue !== undefined) {
-          currentValue.value = newValue
-        }
-      },
+    const [currentValue, setCurrentValue] = useVModels(
+      props,
+      ['checked', 'value'],
+      () => props?.defaultChecked ?? props?.defaultValue ?? mergedUnCheckedValue.value,
+      emit,
     )
 
     // 计算是否选中（用于传递给底层 VcSwitch）
@@ -174,9 +167,7 @@ const Switch = defineComponent<
     const handleVMHandler = (checked: boolean) => {
       // 根据 checked 状态返回对应的自定义值
       const newValue = checked ? mergedCheckedValue.value : mergedUnCheckedValue.value
-      currentValue.value = newValue
-      emit('update:checked', newValue)
-      emit('update:value', newValue)
+      setCurrentValue(newValue)
     }
     return () => {
       const {
