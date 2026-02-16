@@ -19,7 +19,7 @@ export function useVModels<P extends BaseModelPropsWithRecord = BaseModelPropsWi
   defaultValue?: any | (() => any),
   emit?: any,
 ) {
-  const modelProps = props as Record<string, any>
+  const modelProps = props
   const propKeys = Array.from(new Set(Array.isArray(propValue) ? propValue : [propValue]))
     .filter(key => key && key !== 'modelValue')
 
@@ -48,7 +48,7 @@ export function useVModels<P extends BaseModelPropsWithRecord = BaseModelPropsWi
   }
 
   watch(
-    () => [modelProps.modelValue, ...propKeys.map(key => modelProps[key])],
+    [() => modelProps.modelValue, ...propKeys.map(key => () => modelProps[key])],
     syncValue,
   )
 
@@ -60,8 +60,7 @@ export function useVModels<P extends BaseModelPropsWithRecord = BaseModelPropsWi
     if (!isControlled()) {
       mergedValue.value = nextValue
     }
-
-    modelProps['onUpdate:modelValue']?.(nextValue)
+    modelProps?.['onUpdate:modelValue']?.(nextValue)
 
     propKeys.forEach((key) => {
       if (emit) {

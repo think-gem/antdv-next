@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { JavaScriptOutlined } from '@antdv-next/icons'
 import { version } from 'antdv-next'
+import { shallowRef } from 'vue'
+
+const value = shallowRef(2)
 </script>
 
 <template>
@@ -9,11 +12,13 @@ import { version } from 'antdv-next'
       antdv next version {{ version }}
       <JavaScriptOutlined />
     </header>
-    <body>
+    <section>
       <a-button type="primary">
         test
       </a-button>
-    </body>
+      <a-switch v-model="value" :un-checked-value="1" :checked-value="2" />
+      {{ value }}
+    </section>
   </main>
 </template>
 
