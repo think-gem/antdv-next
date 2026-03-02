@@ -3,10 +3,13 @@ import { globalConfig } from '../config-provider'
 
 export function getVueInstance() {
   const instance = getCurrentInstance()
-  const global = globalConfig()
-
-  if (!instance) {
-    return global.appContext ?? null
+  if (instance) {
+    return {
+      ...instance.appContext,
+      provides: (instance as any).provides,
+    }
   }
-  return instance.appContext
+
+  const global = globalConfig()
+  return global.appContext ?? null
 }
