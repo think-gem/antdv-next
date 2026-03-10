@@ -2,6 +2,30 @@
 title: 组件更新日志
 ---
 
+## V1.1.3
+
+本次版本主要聚焦于 **修复 Select / Form / InputNumber / Splitter 等组件的行为问题**，并进一步 **同步 Timeline 与 antd 6.3.2 的细节表现**。同时补充了文档站中一键打开 Playground 的能力，便于调试与示例联动查看。
+
+**✨ 新功能 Features**
+
+* feat：同步 antd 6.3.2 中 Timeline `showLine` 在自定义 `titleHeight` 场景下的对齐表现 by @selicens [#346](https://github.com/antdv-next/antdv-next/pull/346)
+
+**🐞 问题修复 Fixes**
+
+* fix：修复 Select 异常值处理问题 by @aibayanyu20 [#340](https://github.com/antdv-next/antdv-next/pull/340)
+* fix：修复 Select 在 DOM attributes 中的 class 解析问题 by @aibayanyu20 [#343](https://github.com/antdv-next/antdv-next/pull/343)
+* fix(splitter)：修复部分受控场景下 size 计算错误的问题 by @darkingtail [#347](https://github.com/antdv-next/antdv-next/pull/347)
+* fix：修复 InputNumber `format` 场景下光标恢复未生效的问题 by @aibayanyu20 [#352](https://github.com/antdv-next/antdv-next/pull/352)
+* fix：修复 Form `rules.validateTrigger` 错误，并支持新的表单规则 `tel` by @aibayanyu20 [#350](https://github.com/antdv-next/antdv-next/pull/350)
+
+**📝 文档更新 Documentation**
+
+* docs：新增在文档站中打开 Playground 的入口 by @aibayanyu20 [#339](https://github.com/antdv-next/antdv-next/pull/339)
+
+**Full Changelog**
+https://github.com/antdv-next/antdv-next/compare/antdv-next@1.1.1...antdv-next@1.1.3
+
+
 ## V1.1.1
 
 本次版本主要聚焦于 **增强与 Ant Design 的 API 对齐**、**为更多组件补充 slot / SFC 用法支持**，并持续 **修复 Modal、Menu、Tree、Slider、Switch、Skeleton 等组件的行为问题**。同时补充了更多单元测试覆盖，并更新了文档站点内容。

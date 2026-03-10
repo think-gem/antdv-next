@@ -2,6 +2,30 @@
 title: Component Changelog
 ---
 
+## V1.1.3
+
+This release focuses on **fixing behavior issues in Select, Form, InputNumber, and Splitter**, while also **syncing Timeline details with antd 6.3.2**. It also improves the docs site with a direct entry to open demos in Playground for easier debugging and inspection.
+
+**✨ Features**
+
+* feat: sync Timeline `showLine` alignment with custom `titleHeight` from antd 6.3.2 by @selicens in [#346](https://github.com/antdv-next/antdv-next/pull/346)
+
+**🐞 Fixes**
+
+* fix: fix Select abnormal value handling by @aibayanyu20 in [#340](https://github.com/antdv-next/antdv-next/pull/340)
+* fix: fix Select class parsing in DOM attributes by @aibayanyu20 in [#343](https://github.com/antdv-next/antdv-next/pull/343)
+* fix(splitter): fix incorrect size calculation when partially controlled by @darkingtail in [#347](https://github.com/antdv-next/antdv-next/pull/347)
+* fix: fix InputNumber cursor restore not taking effect in `format` scenarios by @aibayanyu20 in [#352](https://github.com/antdv-next/antdv-next/pull/352)
+* fix: fix Form `rules.validateTrigger` errors and support the new `tel` rule by @aibayanyu20 in [#350](https://github.com/antdv-next/antdv-next/pull/350)
+
+**📝 Documentation**
+
+* docs: add an entry to open demos in Playground from the docs site by @aibayanyu20 in [#339](https://github.com/antdv-next/antdv-next/pull/339)
+
+**Full Changelog**
+https://github.com/antdv-next/antdv-next/compare/antdv-next@1.1.1...antdv-next@1.1.3
+
+
 ## V1.1.1
 
 This release focuses on **improving API parity with Ant Design**, **expanding slot/SFC support for more components**, and **fixing behavior issues across Modal, Menu, Tree, Slider, Switch, Skeleton, and more**. It also adds broader unit test coverage and updates the documentation site.
