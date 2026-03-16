@@ -2,6 +2,16 @@
 title: UnoCSS
 ---
 
+首先需要在 `App.vue` 的入口处增加一层 `a-app` 包裹，确保组件运行时有父级样式容器：
+
+```vue
+<template>
+  <a-app>
+    <router-view />
+  </a-app>
+</template>
+```
+
 如果你希望在 `antdv-next` 项目里使用原子化工具类，并且让这些工具类直接映射到 Ant Design 的 CSS 变量体系，可以使用 `@antdv-next/unocss`。
 
 这个包提供了面向 Ant Design 设计 Token 的 UnoCSS 预设，适合希望继续使用 UnoCSS / Wind 风格语法，同时保持运行时主题切换能力的项目。

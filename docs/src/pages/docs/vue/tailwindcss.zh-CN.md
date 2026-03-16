@@ -2,6 +2,16 @@
 title: Tailwind CSS
 ---
 
+首先需要在 `App.vue` 的入口处增加一层 `a-app` 包裹，确保组件运行时有父级样式容器：
+
+```vue
+<template>
+  <a-app>
+    <router-view />
+  </a-app>
+</template>
+```
+
 如果你希望在 `antdv-next` 项目中继续使用 Tailwind CSS，同时让工具类和 Ant Design 的设计 Token 保持一致，可以使用 `@antdv-next/tailwind`。
 
 这个插件会把 Ant Design 的 CSS 变量映射到 Tailwind 的主题系统中，让你在使用 `bg-primary`、`shadow-card`、`text-h1` 这类类名时，仍然能跟随 `antdv-next` 的运行时主题变化。

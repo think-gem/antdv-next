@@ -2,6 +2,16 @@
 title: UnoCSS
 ---
 
+Before anything else, wrap the `App.vue` entry with `a-app` so the runtime has a parent style container:
+
+```vue
+<template>
+  <a-app>
+    <router-view />
+  </a-app>
+</template>
+```
+
 If you want to use atomic utility classes in an `antdv-next` project and have those classes map directly to Ant Design CSS variables, use `@antdv-next/unocss`.
 
 This package provides UnoCSS presets built around Ant Design design tokens. It is a good fit when you want to keep UnoCSS / Wind-style utilities while preserving runtime theming.
