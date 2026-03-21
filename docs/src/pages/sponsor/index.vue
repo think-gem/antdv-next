@@ -1,27 +1,12 @@
 <script setup lang="ts">
-import type { TabsProps } from 'antdv-next'
 import { AlipayCircleOutlined, GithubOutlined, TeamOutlined, UserOutlined, WechatOutlined } from '@antdv-next/icons'
 import dayjs from 'dayjs'
-import { h, onMounted, onUnmounted, reactive, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 
-// 当前 tab
+// Tab
 const activeTab = shallowRef('org')
 
-// Tabs items 配置
-const tabItems: TabsProps['items'] = [
-  {
-    key: 'org',
-    label: '赞助团队',
-    icon: () => h(TeamOutlined),
-  },
-  {
-    key: 'personal',
-    label: '赞助个人',
-    icon: () => h(UserOutlined),
-  },
-]
-
-// 团队成员信息
+// Team members
 const teamMembers = [
   {
     github: 'aibayanyu20',
@@ -80,7 +65,6 @@ interface SponsorForm {
   invoiceEmail?: string
 }
 
-// 组织赞助表单
 const orgSponsorForm = reactive<SponsorForm>({
   amount: 20,
   subject: 'Antdv Next 项目赞助',
@@ -102,11 +86,25 @@ const customInputStyles = {
   },
 }
 
-// 赞助列表
-const sponsorList = shallowRef<any[]>([])
+const amountOptions = [
+  { label: '¥10', value: 10 },
+  { label: '¥20', value: 20 },
+  { label: '¥30', value: 30 },
+  { label: '¥50', value: 50 },
+  { label: '¥100', value: 100 },
+]
+
+// Sponsor list - infinite scroll
+const allSponsors = shallowRef<any[]>([])
+const rawSponsors = shallowRef<any[]>([])
+const sortBy = shallowRef<'amount' | 'time'>('amount')
 const sponsorTotal = shallowRef(0)
 const sponsorLoading = shallowRef(false)
-const sponsorPagination = reactive({ page: 1, pageSize: 10 })
+const displayedCount = shallowRef(0)
+const BATCH = 20
+const allLoaded = computed(() => displayedCount.value >= allSponsors.value.length && allSponsors.value.length > 0)
+
+const displayedSponsors = computed(() => allSponsors.value.slice(0, displayedCount.value))
 
 const submitUrl = 'https://test-pay.lingyu.org.cn'
 
@@ -116,12 +114,14 @@ async function fetchSponsors() {
     const res = await fetch(`${submitUrl}/sponsor/list`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: sponsorPagination.page, pageSize: sponsorPagination.pageSize }),
+      body: JSON.stringify({ page: 1, pageSize: 100 }),
     })
     const { data } = await res.json()
     if (data) {
-      sponsorList.value = data.items || []
-      sponsorTotal.value = data.total || 0
+      const items = data.items || []
+      rawSponsors.value = items
+      sponsorTotal.value = data.total || items.length
+      applySorting()
     }
   }
   catch (e) {
@@ -132,19 +132,89 @@ async function fetchSponsors() {
   }
 }
 
-function handleSponsorPageChange(page: number, pageSize: number) {
-  sponsorPagination.page = page
-  sponsorPagination.pageSize = pageSize
-  fetchSponsors()
+function applySorting() {
+  const items = [...rawSponsors.value]
+  if (sortBy.value === 'amount') {
+    items.sort((a: any, b: any) => (b.amount || 0) - (a.amount || 0))
+  }
+  else {
+    items.sort((a: any, b: any) => new Date(b.paidAt || 0).getTime() - new Date(a.paidAt || 0).getTime())
+  }
+  allSponsors.value = items
+  displayedCount.value = Math.min(BATCH, items.length)
 }
 
-const sponsorColumns = [
-  { title: '赞助人', dataIndex: 'sponsorName', key: 'sponsorName' },
-  { title: '金额', dataIndex: 'amount', key: 'amount', width: 120 },
-  { title: '留言', dataIndex: 'sponsorMessage', key: 'sponsorMessage', ellipsis: true },
-  { title: '时间', dataIndex: 'paidAt', key: 'paidAt', width: 180 },
-]
+function switchSort(type: 'amount' | 'time') {
+  if (sortBy.value === type)
+    return
+  sortBy.value = type
+  applySorting()
+}
 
+function loadMore() {
+  if (allLoaded.value || sponsorLoading.value)
+    return
+  displayedCount.value = Math.min(displayedCount.value + BATCH, allSponsors.value.length)
+}
+
+const scrollContainerRef = ref<HTMLElement>()
+
+function onSponsorScroll(e: Event) {
+  const el = e.target as HTMLElement
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    loadMore()
+  }
+}
+
+// Glow effect
+const sponsorGridRef = ref<HTMLElement>()
+
+function onGlowMove(e: MouseEvent) {
+  const card = (e.target as HTMLElement).closest('.sponsor-card') as HTMLElement | null
+  if (!card)
+    return
+  const glow = card.querySelector('.card-glow') as HTMLElement | null
+  if (!glow)
+    return
+  const rect = card.getBoundingClientRect()
+  glow.style.left = `${e.clientX - rect.left}px`
+  glow.style.top = `${e.clientY - rect.top}px`
+}
+
+function onMemberGlowMove(e: MouseEvent) {
+  const card = (e.target as HTMLElement).closest('.member-card') as HTMLElement | null
+  if (!card)
+    return
+  const glow = card.querySelector('.card-glow') as HTMLElement | null
+  if (!glow)
+    return
+  const rect = card.getBoundingClientRect()
+  glow.style.left = `${e.clientX - rect.left}px`
+  glow.style.top = `${e.clientY - rect.top}px`
+}
+
+// Rank helpers
+function getRankClass(rank: number) {
+  if (rank === 1)
+    return 'rank-gold'
+  if (rank === 2)
+    return 'rank-silver'
+  if (rank === 3)
+    return 'rank-bronze'
+  return 'rank-normal'
+}
+
+function getAmountClass(rank: number) {
+  if (rank === 1)
+    return 'amount-gold'
+  if (rank === 2)
+    return 'amount-silver'
+  if (rank === 3)
+    return 'amount-bronze'
+  return 'amount-normal'
+}
+
+// WeChat payment modal
 const wechatPayVisible = shallowRef(false)
 const wechatPayCodeUrl = shallowRef('')
 const wechatPayOrderNo = shallowRef('')
@@ -179,29 +249,24 @@ function closeWechatPayModal() {
 }
 
 async function queryWechatPayment() {
-  if (!wechatPayOrderNo.value || wechatPayQuerying.value) {
+  if (!wechatPayOrderNo.value || wechatPayQuerying.value)
     return false
-  }
-
   wechatPayQuerying.value = true
   try {
     const res = await fetch(`${submitUrl}/pay/query?orderNo=${encodeURIComponent(wechatPayOrderNo.value)}`)
     const { code, data } = await res.json()
-
     if (code === 0 && data) {
       if (data.paid || data.status === 'paid') {
         stopWechatPayPoll()
         window.location.href = getSuccessPath(wechatPayOrderNo.value)
         return true
       }
-
       if (data.status === 'pending') {
         wechatPayStatus.value = 'pending'
         wechatPayError.value = ''
         return false
       }
     }
-
     wechatPayStatus.value = 'error'
     wechatPayError.value = '支付状态异常，请稍后重新查询'
     stopWechatPayPoll()
@@ -221,21 +286,18 @@ async function queryWechatPayment() {
 
 function scheduleWechatPayPoll() {
   stopWechatPayPoll()
-  if (!wechatPayVisible.value || !wechatPayOrderNo.value) {
+  if (!wechatPayVisible.value || !wechatPayOrderNo.value)
     return
-  }
   if (wechatPollCount >= WECHAT_MAX_POLL_COUNT) {
     wechatPayStatus.value = 'timeout'
     wechatPayError.value = '等待支付确认超时，您可以完成支付后手动刷新状态'
     return
   }
-
   wechatPollTimer = setTimeout(async () => {
     wechatPollCount += 1
     const finished = await queryWechatPayment()
-    if (!finished) {
+    if (!finished)
       scheduleWechatPayPoll()
-    }
   }, WECHAT_POLL_INTERVAL)
 }
 
@@ -249,18 +311,14 @@ function startWechatPayPoll(orderNo: string) {
 
 async function refreshWechatPayment() {
   const finished = await queryWechatPayment()
-  if (!finished && wechatPayVisible.value && !wechatPollTimer) {
+  if (!finished && wechatPayVisible.value && !wechatPollTimer)
     scheduleWechatPayPoll()
-  }
 }
 
 function getSubmitRequest() {
-  const url = `${submitUrl}/pay/page`
-  return fetch(url, {
+  return fetch(`${submitUrl}/pay/page`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       amount: orgSponsorForm.amount,
       subject: orgSponsorForm.subject,
@@ -286,15 +344,12 @@ async function handleOrgSponsorSubmit() {
   try {
     const res = await getSubmitRequest()
     const { code, data } = await res.json()
-    if (code !== 0 || !data) {
+    if (code !== 0 || !data)
       return
-    }
-
     if (orgSponsorForm.payType === 'alipay' && data.url) {
       window.open(data.url, '_blank')
       return
     }
-
     if (orgSponsorForm.payType === 'wechat' && data.codeUrl && data.orderNo) {
       wechatPayCodeUrl.value = data.codeUrl
       wechatPayVisible.value = true
@@ -315,250 +370,320 @@ onUnmounted(() => {
 })
 
 watch(wechatPayVisible, (visible) => {
-  if (!visible) {
+  if (!visible)
     stopWechatPayPoll()
-  }
 })
-
-const amountOptions = [
-  { label: '¥10', value: 10 },
-  { label: '¥20', value: 20 },
-  { label: '¥30', value: 30 },
-  { label: '¥50', value: 50 },
-  { label: '¥100', value: 100 },
-]
 </script>
 
 <template>
   <div class="sponsor-page">
-    <div class="sponsor-container">
-      <!-- 页面标题 -->
-      <div class="sponsor-header">
-        <h1 class="sponsor-title">
+    <!-- HERO -->
+    <section class="hero-mesh flex items-center justify-center px-6 pt-20 pb-12">
+      <div class="max-w-3xl mx-auto text-center fade-in">
+        <div class="hero-badge">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
+          Open Source Sponsor
+        </div>
+        <h1 class="hero-title">
           支持我们的创作与发展
         </h1>
-        <p class="sponsor-desc">
-          您的支持是 Antdv Next 持续输出高质量内容的动力
+        <p class="hero-desc">
+          您的每一份支持，都是 Antdv Next 持续输出高质量内容的动力
         </p>
       </div>
+    </section>
 
-      <!-- Tabs 切换 -->
-      <a-tabs v-model:active-key="activeTab" :items="tabItems" centered size="large" class="sponsor-tabs">
-        <template #contentRender="{ item }">
-          <!-- 组织赞助内容 -->
-          <div v-if="item.key === 'org'" class="tab-content">
-            <div class="content-card">
-              <a-alert class="mb-24px!" type="info" show-icon>
-                <template #message>
+    <!-- MAIN -->
+    <main class="main-content">
+      <!-- Background blobs -->
+      <div class="bg-blobs" aria-hidden="true">
+        <div class="blob blob-1" />
+        <div class="blob blob-2" />
+        <div class="blob blob-3" />
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex justify-center mb-8 fade-in fade-in-d1">
+        <div class="tab-bar">
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'org' }"
+            @click="activeTab = 'org'"
+          >
+            <TeamOutlined />
+            赞助团队
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'personal' }"
+            @click="activeTab = 'personal'"
+          >
+            <UserOutlined />
+            赞助个人
+          </button>
+        </div>
+      </div>
+
+      <!-- ORG TAB -->
+      <div v-show="activeTab === 'org'" class="fade-in fade-in-d2">
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <!-- LEFT: Form -->
+          <div class="lg:col-span-2">
+            <div class="glass-card rounded-2xl p-6 sticky top-6">
+              <!-- Info -->
+              <div class="info-banner mb-6">
+                <svg class="w-5 h-5 shrink-0 mt-0.5" style="color: var(--ant-color-primary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                <p class="text-xs leading-relaxed" style="color: var(--ant-color-text-secondary)">
                   所有赞助资金将优先投入服务器等运营成本，结余部分将以公开透明的方式用于团队支持及社区贡献激励。
-                </template>
-              </a-alert>
+                </p>
+              </div>
 
-              <a-form layout="vertical" class="org-sponsor-form">
-                <a-form-item label="赞助金额">
-                  <div class="amount-grid">
-                    <button
-                      v-for="opt in amountOptions"
-                      :key="opt.value"
-                      class="amount-btn"
-                      :class="{ active: orgSponsorForm.amount === opt.value }"
-                      @click="orgSponsorForm.amount = opt.value"
-                    >
-                      {{ opt.label }}
-                    </button>
-                  </div>
-                  <div class="amount-grid mt-12px">
-                    <a-input-number
-                      v-model:value="orgSponsorForm.amount"
-                      :min="1"
-                      :step="1"
-                      :controls="false"
-                      prefix="¥"
-                      suffix="元"
-                      :styles="customInputStyles"
-                      class="custom-amount-input"
-                      placeholder="自定义金额"
-                    />
-                  </div>
-                </a-form-item>
-
-                <a-form-item label="赞助人">
-                  <a-input
-                    v-model:value="orgSponsorForm.sponsorName"
-                    placeholder="方便的话，留个称呼让我们感谢您~"
+              <!-- Amount -->
+              <div class="mb-5">
+                <label class="form-label">赞助金额</label>
+                <div class="grid grid-cols-3 gap-2">
+                  <button
+                    v-for="opt in amountOptions"
+                    :key="opt.value"
+                    class="amount-chip"
+                    :class="{ active: orgSponsorForm.amount === opt.value }"
+                    @click="orgSponsorForm.amount = opt.value"
+                  >
+                    {{ opt.label }}
+                  </button>
+                  <a-input-number
+                    v-model:value="orgSponsorForm.amount"
+                    :min="1"
+                    :step="1"
+                    :controls="false"
+                    prefix="¥"
+                    suffix="元"
+                    :styles="customInputStyles"
+                    class="custom-amount-input"
+                    placeholder="自定义"
                   />
-                </a-form-item>
+                </div>
+              </div>
 
-                <a-form-item label="留言">
-                  <a-textarea
-                    v-model:value="orgSponsorForm.sponsorMessage"
-                    placeholder="您的每一句话都是我们前进的动力~"
-                    :auto-size="{ minRows: 3, maxRows: 5 }"
-                  />
-                </a-form-item>
+              <!-- Name -->
+              <div class="mb-4">
+                <label class="form-label">赞助人</label>
+                <a-input v-model:value="orgSponsorForm.sponsorName" placeholder="留个称呼让我们感谢您~" />
+              </div>
 
-                <a-form-item label="支付方式">
-                  <a-radio-group v-model:value="orgSponsorForm.payType">
-                    <a-radio value="alipay">
-                      <a-space>
-                        <AlipayCircleOutlined class="text-18px" style="color: #1677ff" />
-                        支付宝
-                      </a-space>
-                    </a-radio>
-                    <a-radio value="wechat">
-                      <a-space>
-                        <WechatOutlined class="text-18px" style="color: #07c160" />
-                        微信支付
-                      </a-space>
-                    </a-radio>
-                  </a-radio-group>
-                </a-form-item>
+              <!-- Message -->
+              <div class="mb-4">
+                <label class="form-label">留言</label>
+                <a-textarea
+                  v-model:value="orgSponsorForm.sponsorMessage"
+                  placeholder="您的每一句话都是我们前进的动力~"
+                  :auto-size="{ minRows: 2, maxRows: 4 }"
+                />
+              </div>
 
-                <a-form-item>
-                  <a-checkbox v-model:checked="orgSponsorForm.invoiceRequired">
-                    需要开具发票
-                  </a-checkbox>
-                </a-form-item>
+              <!-- Payment -->
+              <div class="mb-5">
+                <label class="form-label">支付方式</label>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    class="pay-radio"
+                    :class="{ active: orgSponsorForm.payType === 'alipay' }"
+                    @click="orgSponsorForm.payType = 'alipay'"
+                  >
+                    <AlipayCircleOutlined style="color: #1677ff; font-size: 18px" />
+                    支付宝
+                  </button>
+                  <button
+                    class="pay-radio"
+                    :class="{ active: orgSponsorForm.payType === 'wechat' }"
+                    @click="orgSponsorForm.payType = 'wechat'"
+                  >
+                    <WechatOutlined style="color: #07c160; font-size: 18px" />
+                    微信支付
+                  </button>
+                </div>
+              </div>
 
-                <!-- 发票信息（仅勾选需要发票时显示） -->
-                <template v-if="orgSponsorForm.invoiceRequired">
-                  <div class="invoice-section">
-                    <div class="invoice-header">
-                      <span class="invoice-title">发票信息</span>
-                      <a-tag color="green">
-                        支持电子普票
-                      </a-tag>
-                    </div>
-                    <a-form-item label="公司/组织名称">
-                      <a-input
-                        v-model:value="orgSponsorForm.invoiceCompany"
-                        placeholder="请填写公司全称，用作发票抬头~"
-                      />
-                    </a-form-item>
-                    <a-form-item label="税号">
-                      <a-input
-                        v-model:value="orgSponsorForm.invoiceTaxNo"
-                        placeholder="统一社会信用代码，麻烦您啦~"
-                      />
-                    </a-form-item>
-                    <a-form-item label="接收邮箱">
-                      <a-input
-                        v-model:value="orgSponsorForm.invoiceEmail"
-                        placeholder="电子发票将发送到这里~"
-                      />
-                    </a-form-item>
+              <!-- Invoice -->
+              <div class="mb-4">
+                <a-checkbox v-model:checked="orgSponsorForm.invoiceRequired">
+                  需要开具发票
+                </a-checkbox>
+              </div>
+              <template v-if="orgSponsorForm.invoiceRequired">
+                <div class="invoice-section">
+                  <div class="flex items-center justify-between mb-4">
+                    <span class="text-sm font-600" style="color: var(--ant-color-text)">发票信息</span>
+                    <a-tag color="green">
+                      支持电子普票
+                    </a-tag>
                   </div>
-                </template>
+                  <a-input v-model:value="orgSponsorForm.invoiceCompany" placeholder="公司全称" class="mb-3" />
+                  <a-input v-model:value="orgSponsorForm.invoiceTaxNo" placeholder="统一社会信用代码" class="mb-3" />
+                  <a-input v-model:value="orgSponsorForm.invoiceEmail" placeholder="接收邮箱" />
+                </div>
+              </template>
 
-                <a-form-item>
-                  <a-button type="primary" size="large" block class="submit-btn" :loading="submitting" @click="handleOrgSponsorSubmit">
-                    立即赞助
-                  </a-button>
-                </a-form-item>
-              </a-form>
-
-              <!-- 赞助列表 -->
-              <a-divider>感谢以下股东的赞助和支持</a-divider>
-              <a-table
-                :columns="sponsorColumns"
-                :data-source="sponsorList"
-                :loading="sponsorLoading"
-                :pagination="{
-                  current: sponsorPagination.page,
-                  pageSize: sponsorPagination.pageSize,
-                  total: sponsorTotal,
-                  showSizeChanger: true,
-                  showTotal: (total: number) => `共 ${total} 条`,
-                }"
-                row-key="orderNo"
-                size="middle"
-                @change="(pag: any) => handleSponsorPageChange(pag.current, pag.pageSize)"
-              >
-                <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'sponsorName'">
-                    {{ record.sponsorName || '匿名好心人' }}
-                  </template>
-                  <template v-else-if="column.key === 'amount'">
-                    <span class="sponsor-amount">¥{{ record.amount }}</span>
-                  </template>
-                  <template v-else-if="column.key === 'sponsorMessage'">
-                    {{ record.sponsorMessage || '-' }}
-                  </template>
-                  <template v-else-if="column.key === 'paidAt'">
-                    {{ record.paidAt ? dayjs(record.paidAt).format('YYYY-MM-DD') : '-' }}
-                  </template>
-                </template>
-              </a-table>
+              <!-- Submit -->
+              <a-button type="primary" size="large" block class="submit-btn" :loading="submitting" @click="handleOrgSponsorSubmit">
+                立即赞助
+              </a-button>
             </div>
           </div>
 
-          <!-- 个人赞助内容 -->
-          <div v-else-if="item.key === 'personal'" class="tab-content">
-            <div class="content-card">
-              <a-alert
-                type="info"
-                show-icon
-                class="mb-24px!"
-                message="个人赞助将直接归属于被赞助者本人，组织仅提供平台支持，不参与任何个人赞助资金的管理与分配。"
-              />
-
-              <div class="team-members">
-                <a-card
-                  v-for="member in teamMembers"
-                  :key="member.github"
-                  class="member-card"
-                  hoverable
-                >
-                  <div class="member-content">
-                    <a-avatar :src="member.avatar" :size="80" />
-                    <h3 class="member-name">
-                      {{ member.name }}
-                    </h3>
-                    <a
-                      :href="`https://github.com/${member.github}`"
-                      target="_blank"
-                      rel="noreferrer"
-                      class="member-github"
-                    >
-                      <GithubOutlined />
-                    </a>
-                    <a-space class="member-actions">
-                      <a-popover trigger="hover" placement="bottom">
-                        <template #content>
-                          <a-qrcode :value="member.alipayCode || 'not-has-qr'" :status="member.alipayCode ? undefined : 'loading'" :bordered="false" />
-                        </template>
-                        <a-button type="primary" ghost>
-                          <template #icon>
-                            <AlipayCircleOutlined />
-                          </template>
-                          支付宝
-                        </a-button>
-                      </a-popover>
-                      <a-popover trigger="hover" placement="bottom">
-                        <template #content>
-                          <a-qrcode :value="member.wxCode || 'not-has-qr'" :status="member.wxCode ? undefined : 'loading'" :bordered="false" />
-                        </template>
-                        <a-button style="color: #07c160; border-color: #07c160">
-                          <template #icon>
-                            <WechatOutlined />
-                          </template>
-                          微信
-                        </a-button>
-                      </a-popover>
-                    </a-space>
+          <!-- RIGHT: Sponsor Wall -->
+          <div class="lg:col-span-3">
+            <div class="glass-card rounded-2xl p-6">
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <h2 class="text-lg font-700" style="color: var(--ant-color-text)">
+                    感谢以下赞助者的支持
+                  </h2>
+                  <p class="text-xs mt-1" style="color: var(--ant-color-text-secondary)">
+                    共 {{ sponsorTotal }} 位赞助者
+                  </p>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="sort-bar">
+                    <button class="sort-btn" :class="{ active: sortBy === 'amount' }" @click="switchSort('amount')">
+                      按金额
+                    </button>
+                    <button class="sort-btn" :class="{ active: sortBy === 'time' }" @click="switchSort('time')">
+                      按时间
+                    </button>
                   </div>
-                </a-card>
+                  <div class="flex items-center gap-1.5 text-xs" style="color: var(--ant-color-text-quaternary)">
+                    <span class="live-dot" />
+                    实时更新
+                  </div>
+                </div>
+              </div>
+
+              <!-- Scroll container -->
+              <div ref="scrollContainerRef" class="scroll-container" @scroll="onSponsorScroll">
+                <div ref="sponsorGridRef" class="grid grid-cols-1 sm:grid-cols-2 gap-3" @mousemove="onGlowMove">
+                  <div
+                    v-for="(item, index) in displayedSponsors"
+                    :key="item.orderNo || index"
+                    class="sponsor-card"
+                    :class="{ 'has-glow': index < 3 }"
+                  >
+                    <div class="card-glow" />
+                    <div v-if="index < 3" class="corner-glow" :class="`corner-${index + 1}`" />
+                    <div class="card-content flex items-start gap-3">
+                      <div class="rank-badge" :class="getRankClass(index + 1)">
+                        {{ index + 1 }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm font-600 truncate" style="color: var(--ant-color-text)">{{ item.sponsorName || '匿名好心人' }}</span>
+                          <span class="amount-badge" :class="getAmountClass(index + 1)">¥{{ item.amount }}</span>
+                        </div>
+                        <p class="text-xs mt-1 truncate" style="color: var(--ant-color-text-secondary)">
+                          {{ item.sponsorMessage || '-' }}
+                        </p>
+                        <p class="text-11px mt-1.5" style="color: var(--ant-color-text-quaternary)">
+                          {{ item.paidAt ? dayjs(item.paidAt).format('YYYY-MM-DD') : '-' }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Loading -->
+                <div v-if="sponsorLoading" class="flex items-center justify-center gap-2 py-4 text-xs" style="color: var(--ant-color-text-quaternary)">
+                  <a-spin size="small" />
+                  加载中...
+                </div>
+                <div v-else-if="!allLoaded && allSponsors.length > 0" class="flex items-center justify-center gap-2 py-4 text-xs" style="color: var(--ant-color-text-quaternary)">
+                  <a-spin size="small" />
+                  加载更多...
+                </div>
+                <div v-else-if="allLoaded" class="text-center py-4 text-xs" style="color: var(--ant-color-text-quaternary)">
+                  已加载全部赞助者
+                </div>
               </div>
             </div>
           </div>
-        </template>
-      </a-tabs>
-
-      <div class="sponsor-footer">
-        <p>Antdv Next. 全面保障支付安全及财务合规性。</p>
+        </div>
       </div>
-    </div>
 
+      <!-- PERSONAL TAB -->
+      <div v-show="activeTab === 'personal'" class="fade-in">
+        <div class="glass-card rounded-2xl p-6 max-w-4xl mx-auto">
+          <div class="info-banner mb-6">
+            <svg class="w-5 h-5 shrink-0 mt-0.5" style="color: var(--ant-color-primary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+            <p class="text-xs leading-relaxed" style="color: var(--ant-color-text-secondary)">
+              个人赞助将直接归属于被赞助者本人，组织仅提供平台支持，不参与任何个人赞助资金的管理与分配。
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" @mousemove="onMemberGlowMove">
+            <div v-for="member in teamMembers" :key="member.github" class="member-card">
+              <div class="card-glow" />
+              <div class="card-content text-center">
+                <a-avatar :src="member.avatar" :size="80" class="mb-3" />
+                <h3 class="text-sm font-700 mb-1" style="color: var(--ant-color-text)">
+                  {{ member.name }}
+                </h3>
+                <a
+                  :href="`https://github.com/${member.github}`"
+                  target="_blank"
+                  rel="noreferrer"
+                  class="member-github"
+                >
+                  <GithubOutlined />
+                  @{{ member.github }}
+                </a>
+                <div class="flex items-center justify-center gap-2 mt-3">
+                  <a-popover trigger="hover" placement="bottom">
+                    <template #content>
+                      <a-qrcode
+                        :value="member.alipayCode || 'not-available'"
+                        :status="member.alipayCode ? 'active' : 'loading'"
+                        :bordered="false"
+                        :size="140"
+                      />
+                      <p class="text-xs text-center mt-2" style="color: var(--ant-color-text-secondary)">
+                        支付宝扫码赞助
+                      </p>
+                    </template>
+                    <button class="qr-btn qr-btn-alipay" :disabled="!member.alipayCode">
+                      <AlipayCircleOutlined />
+                      支付宝
+                    </button>
+                  </a-popover>
+                  <a-popover trigger="hover" placement="bottom">
+                    <template #content>
+                      <a-qrcode
+                        :value="member.wxCode || 'not-available'"
+                        :status="member.wxCode ? 'active' : 'loading'"
+                        :bordered="false"
+                        :size="140"
+                      />
+                      <p class="text-xs text-center mt-2" style="color: var(--ant-color-text-secondary)">
+                        微信扫码赞助
+                      </p>
+                    </template>
+                    <button class="qr-btn qr-btn-wechat" :disabled="!member.wxCode">
+                      <WechatOutlined />
+                      微信
+                    </button>
+                  </a-popover>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="text-center mt-16 text-xs" style="color: var(--ant-color-text-quaternary)">
+        <p>Antdv Next · 全面保障支付安全及财务合规性</p>
+      </div>
+    </main>
+
+    <!-- WeChat Pay Modal -->
     <a-modal
       v-model:open="wechatPayVisible"
       :footer="null"
@@ -571,17 +696,15 @@ const amountOptions = [
         <div class="wechat-pay-badge">
           <WechatOutlined />
         </div>
-        <h3 class="wechat-pay-title">
+        <h3 class="text-xl font-700 m-0" style="color: var(--ant-color-text)">
           请使用微信扫一扫完成支付
         </h3>
-        <p class="wechat-pay-subtitle">
+        <p class="text-sm m-0 text-center leading-relaxed" style="color: var(--ant-color-text-secondary)">
           完成扫码后页面会自动确认支付状态，并在成功后跳转到结果页。
         </p>
-
         <div class="wechat-pay-qrcode">
           <a-qrcode :value="wechatPayCodeUrl" :size="220" :bordered="false" />
         </div>
-
         <div class="wechat-pay-meta">
           <div class="wechat-pay-row">
             <span>订单号</span>
@@ -592,30 +715,28 @@ const amountOptions = [
             <strong>¥{{ orgSponsorForm.amount }}</strong>
           </div>
         </div>
-
         <a-alert
           v-if="wechatPayStatus === 'timeout'"
           type="warning"
           show-icon
           :message="wechatPayError"
-          class="wechat-pay-alert"
+          class="w-full"
         />
         <a-alert
           v-else-if="wechatPayStatus === 'error'"
           type="error"
           show-icon
           :message="wechatPayError"
-          class="wechat-pay-alert"
+          class="w-full"
         />
         <a-alert
           v-else
           type="info"
           show-icon
           message="支付结果确认中，请保持此窗口打开。"
-          class="wechat-pay-alert"
+          class="w-full"
         />
-
-        <a-space class="wechat-pay-actions">
+        <a-space class="w-full justify-center">
           <a-button type="primary" :loading="wechatPayQuerying" @click="refreshWechatPayment">
             我已支付，刷新状态
           </a-button>
@@ -630,99 +751,215 @@ const amountOptions = [
 
 <style scoped>
 .sponsor-page {
-  padding: 48px 24px;
-  min-height: calc(100vh - var(--ant-doc-header-height));
+  min-height: calc(100vh - var(--ant-doc-header-height, 64px));
   background: var(--ant-color-bg-layout);
 }
 
-.sponsor-container {
-  max-width: 860px;
-  margin: 0 auto;
+/* Hero */
+.hero-mesh {
+  min-height: 340px;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 40%, rgba(22, 119, 255, 0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 80% 30%, rgba(99, 102, 241, 0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 50% 80%, rgba(22, 119, 255, 0.04) 0%, transparent 70%);
 }
 
-.sponsor-header {
-  text-align: center;
-  margin-bottom: 40px;
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  background: var(--ant-color-primary-bg);
+  border: 1px solid var(--ant-color-primary-border);
+  color: var(--ant-color-primary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 24px;
 }
 
-.sponsor-title {
-  font-size: 36px;
+.hero-title {
+  font-size: 40px;
   font-weight: 800;
-  margin-bottom: 12px;
   color: var(--ant-color-text);
   letter-spacing: -0.5px;
+  line-height: 1.2;
+  margin: 0 0 12px;
 }
 
-.sponsor-desc {
-  font-size: 16px;
+.hero-desc {
+  font-size: 18px;
   color: var(--ant-color-text-secondary);
   margin: 0;
+  max-width: 520px;
+  margin-inline: auto;
+  line-height: 1.6;
 }
 
-.sponsor-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 0;
+/* Main */
+.main-content {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 0 16px 80px;
+  margin-top: -16px;
+  position: relative;
 }
 
-.tab-content {
-  padding: 0;
+.bg-blobs {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
 }
 
-.content-card {
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(48px);
+}
+
+.blob-1 {
+  top: -80px;
+  left: -128px;
+  width: 384px;
+  height: 384px;
+  background: rgba(22, 119, 255, 0.06);
+}
+.blob-2 {
+  top: 33%;
+  right: -96px;
+  width: 320px;
+  height: 320px;
+  background: rgba(99, 102, 241, 0.05);
+}
+.blob-3 {
+  bottom: 25%;
+  left: 25%;
+  width: 288px;
+  height: 288px;
+  background: rgba(139, 92, 246, 0.04);
+}
+
+/* Tabs */
+.tab-bar {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
   background: var(--ant-color-bg-container);
-  border-radius: 24px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   border: 1px solid var(--ant-color-border-secondary);
-  padding: 32px;
-  margin-top: 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.org-sponsor-form {
-  max-width: 100%;
-}
-
-.amount-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-}
-
-.amount-btn {
-  padding: 14px 8px;
-  border: 2px solid var(--ant-color-border);
-  border-radius: 16px;
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ant-color-text-secondary);
   background: transparent;
-  font-size: 16px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+}
+
+/* Glass card */
+.glass-card {
+  background: color-mix(in srgb, var(--ant-color-bg-container) 72%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--ant-color-bg-container) 80%, transparent);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.04);
+}
+
+/* Info banner */
+.info-banner {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--ant-color-primary-bg);
+  border: 1px solid var(--ant-color-primary-border);
+}
+
+/* Form */
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ant-color-text);
+  margin-bottom: 8px;
+}
+
+/* Amount chips */
+.amount-chip {
+  padding: 10px 8px;
+  border: 2px solid var(--ant-color-border);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
   font-weight: 700;
   color: var(--ant-color-text);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
 }
 
-.amount-btn:hover {
+.amount-chip:hover {
   border-color: var(--ant-color-primary);
   color: var(--ant-color-primary);
 }
 
-.amount-btn.active {
+.amount-chip.active {
   border-color: var(--ant-color-primary);
   background: var(--ant-color-primary-bg);
   color: var(--ant-color-primary);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.08);
 }
 
 .custom-amount-input {
   width: 100%;
-  padding: 10px 8px;
-  border: 2px solid var(--ant-color-border);
-  border-radius: 16px;
-  background: transparent;
-  transition: all 0.2s;
+  border-radius: 12px;
 }
 
-.custom-amount-input:hover,
-.custom-amount-input:focus-within {
+/* Pay radio */
+.pay-radio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 2px solid var(--ant-color-border);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ant-color-text);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.pay-radio:hover {
   border-color: var(--ant-color-primary);
 }
 
+.pay-radio.active {
+  border-color: var(--ant-color-primary);
+  background: var(--ant-color-primary-bg);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.08);
+}
+
+/* Invoice */
 .invoice-section {
   background: var(--ant-color-fill-quaternary);
   border-radius: 16px;
@@ -730,108 +967,314 @@ const amountOptions = [
   margin-bottom: 16px;
 }
 
-.invoice-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.invoice-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ant-color-text);
-}
-
+/* Submit */
 .submit-btn {
   height: 48px;
   font-size: 16px;
   font-weight: 600;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.25);
 }
 
-.sponsor-amount {
-  font-weight: 600;
-  color: #52c41a;
+/* Sort bar */
+.sort-bar {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--ant-color-fill-quaternary);
 }
 
-.team-members {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+.sort-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ant-color-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s ease;
 }
 
-.member-card {
-  text-align: center;
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.member-card :deep(.ant-card-body) {
-  padding: 24px 16px;
-}
-
-.member-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.member-name {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
+.sort-btn:hover {
   color: var(--ant-color-text);
 }
 
-.member-github {
-  color: var(--ant-color-text-secondary);
-  text-decoration: none;
+.sort-btn.active {
+  color: var(--ant-color-primary);
+  background: var(--ant-color-bg-container);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* Live dot */
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Scroll container */
+.scroll-container {
+  max-height: 640px;
+  overflow-y: auto;
+  padding: 8px;
+  margin: -8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ant-color-border) transparent;
+}
+
+.scroll-container::-webkit-scrollbar {
+  width: 4px;
+}
+.scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-container::-webkit-scrollbar-thumb {
+  background: var(--ant-color-border);
+  border-radius: 2px;
+}
+
+/* Sponsor card */
+.sponsor-card {
+  position: relative;
+  overflow: clip;
+  padding: 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ant-color-bg-container) 55%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--ant-color-bg-container) 60%, transparent);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.sponsor-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ant-color-primary-border);
+  box-shadow:
+    0 8px 32px rgba(22, 119, 255, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.sponsor-card .card-glow {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 119, 255, 0.15) 0%, rgba(99, 102, 241, 0.08) 40%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.sponsor-card:hover .card-glow {
+  opacity: 1;
+}
+.sponsor-card .card-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* Corner glow for top 3 */
+.corner-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.corner-1 {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(251, 191, 36, 0.04) 40%, transparent 70%);
+}
+.corner-2 {
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.1) 0%, rgba(148, 163, 184, 0.03) 40%, transparent 70%);
+}
+.corner-3 {
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.1) 0%, rgba(217, 119, 6, 0.03) 40%, transparent 70%);
+}
+
+/* Rank badges */
+.rank-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.rank-gold {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+}
+.rank-silver {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(100, 116, 139, 0.3);
+}
+.rank-bronze {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(180, 83, 9, 0.3);
+}
+.rank-normal {
+  background: var(--ant-color-fill-secondary);
+  color: var(--ant-color-text-secondary);
+}
+
+/* Amount badges */
+.amount-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.amount-gold {
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.15);
+}
+.amount-silver {
+  color: #475569;
+  background: rgba(148, 163, 184, 0.15);
+}
+.amount-bronze {
+  color: #9a3412;
+  background: rgba(217, 119, 6, 0.12);
+}
+.amount-normal {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.08);
+}
+
+/* Member card */
+.member-card {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ant-color-bg-container) 55%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--ant-color-bg-container) 60%, transparent);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 4px 16px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+}
+
+.member-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--ant-color-primary-border);
+  box-shadow:
+    0 12px 40px rgba(22, 119, 255, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.member-card .card-glow {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(22, 119, 255, 0.12) 0%, rgba(139, 92, 246, 0.06) 40%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.member-card:hover .card-glow {
+  opacity: 1;
+}
+.member-card .card-content {
+  position: relative;
+  z-index: 1;
+}
+
+.member-github {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+  text-decoration: none;
+  transition: color 0.2s;
 }
 
 .member-github:hover {
   color: var(--ant-color-primary);
 }
 
-.member-actions {
-  margin-top: 4px;
-}
-
-.qrcode-content {
-  text-align: center;
-  padding: 8px;
-}
-
-.qrcode-img {
-  width: 180px;
-  height: 180px;
+/* QR buttons */
+.qr-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
   border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
 }
 
-.qrcode-tip {
-  margin-top: 10px;
-  color: var(--ant-color-text-secondary);
-  margin-bottom: 0;
-  font-size: 13px;
+.qr-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.sponsor-footer {
-  text-align: center;
-  margin-top: 40px;
-  color: var(--ant-color-text-quaternary);
-  font-size: 13px;
+.qr-btn-alipay {
+  border: 1px solid var(--ant-color-primary-border);
+  background: var(--ant-color-primary-bg);
+  color: var(--ant-color-primary);
 }
 
-.sponsor-footer p {
-  margin: 0;
+.qr-btn-alipay:not(:disabled):hover {
+  background: rgba(22, 119, 255, 0.12);
 }
 
+.qr-btn-wechat {
+  border: 1px solid #b7eb8f;
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.qr-btn-wechat:not(:disabled):hover {
+  background: rgba(82, 196, 26, 0.12);
+}
+
+/* WeChat pay modal */
 .wechat-pay-sheet {
   display: flex;
   flex-direction: column;
@@ -850,20 +1293,6 @@ const amountOptions = [
   background: rgba(7, 193, 96, 0.12);
   color: #07c160;
   font-size: 28px;
-}
-
-.wechat-pay-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ant-color-text);
-}
-
-.wechat-pay-subtitle {
-  margin: 0;
-  text-align: center;
-  color: var(--ant-color-text-secondary);
-  line-height: 1.6;
 }
 
 .wechat-pay-qrcode {
@@ -896,146 +1325,85 @@ const amountOptions = [
   word-break: break-all;
 }
 
-.wechat-pay-alert {
-  width: 100%;
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.wechat-pay-actions {
-  width: 100%;
-  justify-content: center;
+.fade-in {
+  animation: fadeInUp 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+.fade-in-d1 {
+  animation-delay: 0.05s;
+  opacity: 0;
+}
+.fade-in-d2 {
+  animation-delay: 0.1s;
+  opacity: 0;
 }
 
+/* Responsive */
 @media (max-width: 768px) {
-  .sponsor-page {
-    padding: 20px 12px;
+  .hero-mesh {
+    min-height: 280px;
+    padding-top: 48px;
   }
-
-  .sponsor-header {
-    margin-bottom: 24px;
+  .hero-title {
+    font-size: 28px;
   }
-
-  .sponsor-title {
-    font-size: 24px;
-    letter-spacing: 0;
+  .hero-desc {
+    font-size: 15px;
   }
-
-  .sponsor-desc {
-    font-size: 14px;
+  .main-content {
+    padding: 0 12px 48px;
   }
-
-  .content-card {
+  .glass-card {
     padding: 16px;
-    border-radius: 16px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
   }
-
-  .amount-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+  .scroll-container {
+    max-height: 480px;
   }
-
-  .amount-btn {
-    padding: 10px 4px;
-    font-size: 14px;
-    border-radius: 12px;
+  .member-card {
+    padding: 16px;
   }
-
-  .invoice-section {
-    padding: 14px;
-    border-radius: 12px;
-  }
-
   .submit-btn {
     height: 44px;
     font-size: 15px;
-    border-radius: 12px;
-  }
-
-  .team-members {
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .member-card {
-    border-radius: 12px;
-  }
-
-  .member-card :deep(.ant-card-body) {
-    padding: 16px 10px;
-  }
-
-  .member-content {
-    gap: 8px;
-  }
-
-  .member-content :deep(.ant-avatar) {
-    width: 56px !important;
-    height: 56px !important;
-    font-size: 24px !important;
-  }
-
-  .member-name {
-    font-size: 14px;
-  }
-
-  .member-actions {
-    margin-top: 2px;
-  }
-
-  .member-actions :deep(.ant-btn) {
-    padding: 0 8px;
-    font-size: 12px;
-    height: 28px;
-  }
-
-  .qrcode-img {
-    width: 150px;
-    height: 150px;
-  }
-
-  .sponsors-list {
-    gap: 14px;
-  }
-
-  .sponsor-footer {
-    margin-top: 28px;
-  }
-
-  .wechat-pay-qrcode {
-    padding: 14px;
   }
 }
 
 @media (max-width: 375px) {
-  .sponsor-page {
-    padding: 16px 10px;
+  .hero-title {
+    font-size: 22px;
   }
-
-  .sponsor-title {
-    font-size: 20px;
-  }
-
-  .content-card {
-    padding: 12px;
-  }
-
-  .amount-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-
-  .amount-btn {
-    padding: 8px 2px;
+  .amount-chip {
+    padding: 8px 4px;
     font-size: 13px;
+    border-radius: 10px;
   }
+}
 
-  .team-members {
-    grid-template-columns: 1fr;
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .fade-in-d1,
+  .fade-in-d2 {
+    animation: none;
+    opacity: 1;
   }
-
-  .member-content :deep(.ant-avatar) {
-    width: 48px !important;
-    height: 48px !important;
+  .sponsor-card,
+  .member-card {
+    transition: none;
+  }
+  .live-dot {
+    animation: none;
+    opacity: 1;
   }
 }
 </style>
