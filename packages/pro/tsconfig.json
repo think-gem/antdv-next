@@ -3,8 +3,10 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "antdv-next": ["../antdv-next/src/index.ts"],
-      "antdv-next/*": ["../antdv-next/src/*"]
+      "antdv-next": ["../antdv-next/dist/index.d.ts"],
+      "antdv-next/*": ["../antdv-next/dist/*"],
+      "@antdv-next/cssinjs": ["../cssinjs/dist/index.d.ts"],
+      "@antdv-next/cssinjs/*": ["../cssinjs/dist/*"]
     },
     /* Linting */
     "strict": true,
@@ -15,6 +17,7 @@
     "noUncheckedSideEffectImports": true
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.vue"

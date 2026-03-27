@@ -22,6 +22,14 @@ export default defineConfig({
   external: [
     'vue',
     'antdv-next',
+    'antdv-next/config-provider',
+    'antdv-next/config-provider/context',
+    'antdv-next/config-provider/DisabledContext',
+    'antdv-next/config-provider/hooks/useSize',
+    'antdv-next/config-provider/hooks/useCSSVarCls',
+    'antdv-next/theme/internal',
+    '@antdv-next/cssinjs',
+    '@antdv-next/cssinjs/cssinjs-utils',
   ],
   outExtensions() {
     return {
