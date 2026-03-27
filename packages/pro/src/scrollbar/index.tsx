@@ -1,11 +1,11 @@
 import type { ComponentBaseProps } from 'antdv-next/config-provider/context'
-import type { App, CSSProperties, SlotsType } from 'vue'
+import type { App, CSSProperties, ShallowRef, SlotsType } from 'vue'
 import type { SemanticClassNamesType, SemanticStylesType } from '../_util/semantic'
 import type { ScrollbarConfig, ScrollbarVisibility } from '../config-provider'
 import { clsx } from '@v-c/util'
 import { useBaseConfig } from 'antdv-next/config-provider/context'
 import useCSSVarCls from 'antdv-next/config-provider/hooks/useCSSVarCls'
-import { computed, defineComponent, shallowRef } from 'vue'
+import { computed, defineComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useMergeSemantic } from '../_util/semantic'
 import { useProComponentConfig } from '../config-provider'
 import { useScrollbarDrag } from './hooks/useScrollbarDrag'
@@ -44,12 +44,14 @@ export interface ScrollbarProps extends ComponentBaseProps {
   visibility?: ScrollbarVisibility
   visibilityX?: ScrollbarVisibility
   visibilityY?: ScrollbarVisibility
+  hideDelay?: number
   native?: boolean
   classes?: ScrollbarClassNamesType
   styles?: ScrollbarStylesType
 }
 
 export interface ScrollbarEmits {
+  scroll: (event: Event) => void
   [key: string]: (...args: any[]) => void
 }
 
@@ -57,7 +59,16 @@ export interface ScrollbarSlots {
   default?: () => any
 }
 
+export interface ScrollbarRef {
+  containerRef: ShallowRef<HTMLElement | undefined>
+  scrollTo: {
+    (options: ScrollToOptions): void
+    (left: number, top?: number): void
+  }
+}
+
 const DEFAULT_VISIBILITY: ScrollbarVisibility = 'auto'
+const DEFAULT_HIDE_DELAY = 1200
 
 function omitClassAndStyle(attrs: Record<string, any>) {
   const nextAttrs = { ...attrs }
@@ -72,7 +83,7 @@ const Scrollbar = defineComponent<
   string,
   SlotsType<ScrollbarSlots>
 >(
-  (props, { slots, attrs }) => {
+  (props, { slots, attrs, emit, expose }) => {
     const { prefixCls, direction } = useBaseConfig('scrollbar', props)
     const proConfig = useProComponentConfig('scrollbar')
     const containerRef = shallowRef<HTMLElement>()
@@ -95,12 +106,17 @@ const Scrollbar = defineComponent<
       return props.native ?? proConfig.value.native ?? false
     })
 
+    const mergedHideDelay = computed(() => {
+      return props.hideDelay ?? proConfig.value.hideDelay ?? DEFAULT_HIDE_DELAY
+    })
+
     const mergedConfig = computed<ScrollbarConfig>(() => {
       return {
         ...proConfig.value,
         visibility: mergedVisibility.value,
         visibilityX: mergedVisibilityX.value,
         visibilityY: mergedVisibilityY.value,
+        hideDelay: mergedHideDelay.value,
         native: mergedNative.value,
       }
     })
@@ -118,6 +134,7 @@ const Scrollbar = defineComponent<
           visibility: mergedVisibility.value,
           visibilityX: mergedVisibilityX.value,
           visibilityY: mergedVisibilityY.value,
+          hideDelay: mergedHideDelay.value,
           native: mergedNative.value,
         },
       })),
@@ -160,6 +177,137 @@ const Scrollbar = defineComponent<
       scrollbarState.thumbSizeY,
       scrollbarState.sync,
     )
+    const hovering = ref(false)
+    const overlaysVisible = ref(true)
+    const hasAutoVisibility = computed(() => {
+      return mergedVisibilityX.value === 'auto' || mergedVisibilityY.value === 'auto'
+    })
+    const dragging = computed(() => {
+      return scrollbarDrag.draggingX.value || scrollbarDrag.draggingY.value
+    })
+
+    let hideTimer: ReturnType<typeof window.setTimeout> | undefined
+
+    function clearHideTimer() {
+      if (hideTimer !== undefined) {
+        window.clearTimeout(hideTimer)
+        hideTimer = undefined
+      }
+    }
+
+    function showOverlays() {
+      overlaysVisible.value = true
+      clearHideTimer()
+    }
+
+    function scheduleHide() {
+      clearHideTimer()
+      if (!hasAutoVisibility.value || hovering.value || dragging.value || mergedNative.value) {
+        return
+      }
+
+      hideTimer = window.setTimeout(() => {
+        overlaysVisible.value = false
+        hideTimer = undefined
+      }, mergedHideDelay.value)
+    }
+
+    const showTrackX = computed(() => {
+      if (!scrollbarState.showTrackX.value) {
+        return false
+      }
+      return mergedVisibilityX.value !== 'auto' || overlaysVisible.value
+    })
+
+    const showTrackY = computed(() => {
+      if (!scrollbarState.showTrackY.value) {
+        return false
+      }
+      return mergedVisibilityY.value !== 'auto' || overlaysVisible.value
+    })
+
+    watch(
+      [hasAutoVisibility, mergedHideDelay],
+      ([autoVisibility]) => {
+        if (!autoVisibility) {
+          overlaysVisible.value = true
+          clearHideTimer()
+          return
+        }
+
+        overlaysVisible.value = true
+        scheduleHide()
+      },
+      { immediate: true },
+    )
+
+    watch(dragging, (value) => {
+      if (value) {
+        showOverlays()
+        return
+      }
+      scheduleHide()
+    })
+
+    onBeforeUnmount(() => {
+      clearHideTimer()
+    })
+
+    function handleScroll(event: Event) {
+      scrollbarState.sync()
+      showOverlays()
+      scheduleHide()
+      emit('scroll', event)
+    }
+
+    function handleMouseEnter() {
+      hovering.value = true
+      showOverlays()
+    }
+
+    function handleMouseLeave() {
+      hovering.value = false
+      scheduleHide()
+    }
+
+    function scrollTo(options: ScrollToOptions): void
+    function scrollTo(left: number, top?: number): void
+    function scrollTo(leftOrOptions: number | ScrollToOptions, top = 0) {
+      const container = containerRef.value
+      if (!container) {
+        return
+      }
+
+      if (typeof leftOrOptions === 'object') {
+        if (typeof container.scrollTo === 'function') {
+          container.scrollTo(leftOrOptions)
+        }
+        else {
+          if (leftOrOptions.left !== undefined) {
+            container.scrollLeft = leftOrOptions.left
+          }
+          if (leftOrOptions.top !== undefined) {
+            container.scrollTop = leftOrOptions.top
+          }
+        }
+      }
+      else if (typeof container.scrollTo === 'function') {
+        container.scrollTo(leftOrOptions, top)
+      }
+      else {
+        container.scrollLeft = leftOrOptions
+        container.scrollTop = top
+      }
+
+      scrollbarState.sync()
+    }
+
+    const api: ScrollbarRef = {
+      containerRef,
+      scrollTo,
+    }
+
+    expose(api)
 
     return () => (
       <div
@@ -168,18 +316,21 @@ const Scrollbar = defineComponent<
         data-visibility={mergedVisibility.value}
         data-visibility-x={mergedVisibilityX.value}
         data-visibility-y={mergedVisibilityY.value}
+        data-active={overlaysVisible.value ? '' : undefined}
         data-native={mergedNative.value ? '' : undefined}
+        onMouseenter={handleMouseEnter}
+        onMouseleave={handleMouseLeave}
         {...omitClassAndStyle(attrs as Record<string, any>)}
       >
         <div
           ref={containerRef}
           class={clsx(`${prefixCls.value}-container`, mergedClassNames.value.container)}
           style={mergedStyles.value.container}
-          onScroll={scrollbarState.sync}
+          onScroll={handleScroll}
         >
           {slots.default?.()}
         </div>
-        {!mergedNative.value && scrollbarState.showTrackY.value && (
+        {!mergedNative.value && showTrackY.value && (
           <div
             class={clsx(
               `${prefixCls.value}-track`,
@@ -208,7 +359,7 @@ const Scrollbar = defineComponent<
             />
           </div>
         )}
-        {!mergedNative.value && scrollbarState.showTrackX.value && (
+        {!mergedNative.value && showTrackX.value && (
           <div
             class={clsx(
               `${prefixCls.value}-track`,

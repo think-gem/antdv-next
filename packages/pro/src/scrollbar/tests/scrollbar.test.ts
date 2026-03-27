@@ -273,6 +273,15 @@ describe('Scrollbar', () => {
     expect(wrapper.find('.ant-scrollbar-thumb-y').exists()).toBe(true)
   })
 
+  it('emits scroll when container scrolls', async () => {
+    const wrapper = mount(Scrollbar)
+    const container = wrapper.find('.ant-scrollbar-container')
+
+    await container.trigger('scroll')
+
+    expect(wrapper.emitted('scroll')).toHaveLength(1)
+  })
+
   it('renders a horizontal custom scrollbar when horizontal overflow exists', async () => {
     const wrapper = mount(Scrollbar, {
       slots: {
@@ -330,6 +339,49 @@ describe('Scrollbar', () => {
     await nextTick()
 
     expect(wrapper.find('.ant-scrollbar-track-x').exists()).toBe(true)
+  })
+
+  it('auto hides overlays after pointer leaves and shows them again on re-enter', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const wrapper = mount(Scrollbar, {
+        props: {
+          hideDelay: 100,
+        },
+      })
+
+      const root = wrapper.find('.ant-scrollbar')
+      const container = wrapper.find('.ant-scrollbar-container')
+
+      mockScrollMetrics(container.element, {
+        clientHeight: 100,
+        scrollHeight: 240,
+        scrollTop: 0,
+        clientWidth: 100,
+        scrollWidth: 100,
+        scrollLeft: 0,
+      })
+
+      await container.trigger('scroll')
+      await nextTick()
+
+      expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(true)
+
+      await root.trigger('mouseleave')
+      await vi.advanceTimersByTimeAsync(100)
+      await nextTick()
+
+      expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(false)
+
+      await root.trigger('mouseenter')
+      await nextTick()
+
+      expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(true)
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('disables custom overlays in native mode', async () => {
@@ -403,5 +455,19 @@ describe('Scrollbar', () => {
     document.dispatchEvent(new MouseEvent('mouseup'))
 
     expect(scrollLeft).toBeGreaterThan(0)
+  })
+
+  it('exposes scrollTo method', async () => {
+    const wrapper = mount(Scrollbar)
+    const container = wrapper.find('.ant-scrollbar-container')
+    const calls: Array<[number, number]> = []
+
+    ;(container.element as HTMLElement).scrollTo = ((left: number, top: number) => {
+      calls.push([left, top])
+    }) as any
+
+    ;(wrapper.vm as any).scrollTo(12, 34)
+
+    expect(calls).toEqual([[12, 34]])
   })
 })
