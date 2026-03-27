@@ -1,4 +1,3 @@
-import type { ComponentBaseProps } from 'antdv-next/config-provider/context'
 import type { App, CSSProperties, ShallowRef, SlotsType } from 'vue'
 import type { SemanticClassNamesType, SemanticStylesType } from '../_util/semantic'
 import type { ScrollbarConfig, ScrollbarVisibility } from '../config-provider'
@@ -39,7 +38,8 @@ export interface ScrollbarSemanticStyles {
 export type ScrollbarClassNamesType = SemanticClassNamesType<ScrollbarProps, ScrollbarSemanticClassNames>
 export type ScrollbarStylesType = SemanticStylesType<ScrollbarProps, ScrollbarSemanticStyles>
 
-export interface ScrollbarProps extends ComponentBaseProps {
+export interface ScrollbarProps {
+  prefixCls?: string
   rootClass?: string
   visibility?: ScrollbarVisibility
   visibilityX?: ScrollbarVisibility
