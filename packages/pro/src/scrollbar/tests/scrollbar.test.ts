@@ -399,6 +399,24 @@ describe('Scrollbar', () => {
     expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(false)
   })
 
+  it('restores native scrollbar styles in native mode', async () => {
+    mount(Scrollbar, {
+      props: {
+        native: true,
+      },
+    })
+
+    await nextTick()
+
+    const styleText = Array.from(document.head.querySelectorAll('style'))
+      .map(node => node.textContent ?? '')
+      .join('\n')
+
+    expect(styleText).toContain('.ant-scrollbar-native')
+    expect(styleText).toContain('scrollbar-width:auto')
+    expect(styleText).toContain('ms-overflow-style:auto')
+  })
+
   it('updates scrollTop when dragging the vertical thumb', async () => {
     const wrapper = mount(Scrollbar)
     const container = wrapper.find('.ant-scrollbar-container')
