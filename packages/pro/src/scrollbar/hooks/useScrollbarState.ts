@@ -1,6 +1,6 @@
 import type { Ref, ShallowRef } from 'vue'
 import type { ScrollbarVisibility } from '../../config-provider'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 interface ScrollMetrics {
   clientWidth: number
@@ -15,6 +15,7 @@ const MIN_THUMB_SIZE = 20
 
 export function useScrollbarState(
   containerRef: ShallowRef<HTMLElement | undefined>,
+  contentRef: ShallowRef<HTMLElement | undefined>,
   visibilityX: Ref<ScrollbarVisibility | undefined>,
   visibilityY: Ref<ScrollbarVisibility | undefined>,
 ) {
@@ -100,6 +101,50 @@ export function useScrollbarState(
 
   onMounted(() => {
     sync()
+  })
+
+  let resizeObserver: ResizeObserver | undefined
+
+  watch(
+    [containerRef, contentRef],
+    ([container, content], [prevContainer, prevContent]) => {
+      if (typeof ResizeObserver === 'undefined') {
+        sync()
+        return
+      }
+
+      if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(() => {
+          sync()
+        })
+      }
+
+      if (prevContainer && prevContainer !== container) {
+        resizeObserver.unobserve(prevContainer)
+      }
+
+      if (prevContent && prevContent !== content) {
+        resizeObserver.unobserve(prevContent)
+      }
+
+      if (container) {
+        resizeObserver.observe(container)
+      }
+
+      if (content) {
+        resizeObserver.observe(content)
+      }
+
+      sync()
+    },
+    {
+      immediate: true,
+      flush: 'post',
+    },
+  )
+
+  onBeforeUnmount(() => {
+    resizeObserver?.disconnect()
   })
 
   return {

@@ -25,6 +25,58 @@ function mockScrollMetrics(element: Element, metrics: Partial<Record<'clientWidt
   })
 }
 
+class TestResizeObserver {
+  static instances: TestResizeObserver[] = []
+
+  private readonly observed = new Set<Element>()
+  private readonly callback: ResizeObserverCallback
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+    TestResizeObserver.instances.push(this)
+  }
+
+  observe = vi.fn((target: Element) => {
+    this.observed.add(target)
+  })
+
+  unobserve = vi.fn((target: Element) => {
+    this.observed.delete(target)
+  })
+
+  disconnect = vi.fn(() => {
+    this.observed.clear()
+  })
+
+  trigger(target: Element) {
+    if (!this.observed.has(target)) {
+      return
+    }
+
+    this.callback([{ target } as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+
+  static reset() {
+    TestResizeObserver.instances = []
+  }
+
+  static trigger(target: Element) {
+    TestResizeObserver.instances.forEach(instance => instance.trigger(target))
+  }
+}
+
+function installResizeObserverMock() {
+  const originResizeObserver = globalThis.ResizeObserver
+
+  TestResizeObserver.reset()
+  globalThis.ResizeObserver = TestResizeObserver as unknown as typeof ResizeObserver
+
+  return () => {
+    globalThis.ResizeObserver = originResizeObserver
+    TestResizeObserver.reset()
+  }
+}
+
 describe('Scrollbar', () => {
   it('exports Scrollbar from package entry', async () => {
     const mod = await import('../../index')
@@ -99,6 +151,7 @@ describe('Scrollbar', () => {
         classes: {
           root: 'scrollbar-root',
           container: 'scrollbar-container',
+          content: 'scrollbar-content',
           track: 'scrollbar-track',
           trackY: 'scrollbar-track-y',
           trackX: 'scrollbar-track-x',
@@ -109,6 +162,7 @@ describe('Scrollbar', () => {
         styles: {
           root: { padding: '4px' },
           container: { outline: '1px solid red' },
+          content: { minWidth: '320px' },
           track: { backgroundColor: 'rgb(1, 2, 3)' },
           thumb: { backgroundColor: 'rgb(4, 5, 6)' },
         },
@@ -121,6 +175,8 @@ describe('Scrollbar', () => {
     expect(wrapper.find('.ant-scrollbar').attributes('style')).toContain('padding: 4px')
     expect(wrapper.find('.ant-scrollbar-container').classes()).toContain('scrollbar-container')
     expect(wrapper.find('.ant-scrollbar-container').attributes('style')).toContain('outline: 1px solid red')
+    expect(wrapper.find('.ant-scrollbar-content').classes()).toContain('scrollbar-content')
+    expect(wrapper.find('.ant-scrollbar-content').attributes('style')).toContain('min-width: 320px')
     expect(wrapper.find('.ant-scrollbar-track-y').classes()).toContain('scrollbar-track')
     expect(wrapper.find('.ant-scrollbar-track-y').classes()).toContain('scrollbar-track-y')
     expect(wrapper.find('.ant-scrollbar-track-y').attributes('style')).toContain('background-color: rgb(1, 2, 3)')
@@ -134,12 +190,14 @@ describe('Scrollbar', () => {
   it('supports semantic classes and styles as functions', async () => {
     const classes = vi.fn((info: { props: any }) => ({
       root: info.props.native ? 'native-root' : 'custom-root',
+      content: 'dynamic-content',
       trackY: info.props.visibilityY === 'always' ? 'always-track-y' : 'auto-track-y',
       thumbY: 'dynamic-thumb-y',
     }))
 
     const styles = vi.fn((info: { props: any }) => ({
       root: { margin: info.props.native ? '1px' : '2px' },
+      content: { paddingBottom: info.props.native ? '3px' : '5px' },
       thumbY: { backgroundColor: info.props.visibilityY === 'always' ? 'rgb(7, 8, 9)' : 'rgb(9, 8, 7)' },
     }))
 
@@ -157,6 +215,8 @@ describe('Scrollbar', () => {
     expect(styles).toHaveBeenCalled()
     expect(wrapper.find('.ant-scrollbar').classes()).toContain('custom-root')
     expect(wrapper.find('.ant-scrollbar').attributes('style')).toContain('margin: 2px')
+    expect(wrapper.find('.ant-scrollbar-content').classes()).toContain('dynamic-content')
+    expect(wrapper.find('.ant-scrollbar-content').attributes('style')).toContain('padding-bottom: 5px')
     expect(wrapper.find('.ant-scrollbar-track-y').classes()).toContain('always-track-y')
     expect(wrapper.find('.ant-scrollbar-thumb-y').classes()).toContain('dynamic-thumb-y')
     expect(wrapper.find('.ant-scrollbar-thumb-y').attributes('style')).toContain('background-color: rgb(7, 8, 9)')
@@ -175,10 +235,12 @@ describe('Scrollbar', () => {
         scrollbar: {
           classes: {
             root: 'provider-root',
+            content: 'provider-content',
             trackY: 'provider-track-y',
           },
           styles: {
             root: { border: '1px solid blue' },
+            content: { borderBottom: '1px solid red' },
             thumbY: { borderRadius: '20px' },
           },
         },
@@ -189,10 +251,12 @@ describe('Scrollbar', () => {
             visibilityY: 'always',
             classes: {
               root: 'props-root',
+              content: 'props-content',
               thumbY: 'props-thumb-y',
             },
             styles: {
               root: { padding: '6px' },
+              content: { backgroundColor: 'rgb(200, 201, 202)' },
               thumbY: { backgroundColor: 'rgb(10, 11, 12)' },
             },
           }),
@@ -202,12 +266,17 @@ describe('Scrollbar', () => {
     await nextTick()
 
     const root = wrapper.find('.ant-scrollbar')
+    const content = wrapper.find('.ant-scrollbar-content')
     const thumbY = wrapper.find('.ant-scrollbar-thumb-y')
 
     expect(root.classes()).toContain('provider-root')
     expect(root.classes()).toContain('props-root')
     expect(root.attributes('style')).toContain('border: 1px solid blue')
     expect(root.attributes('style')).toContain('padding: 6px')
+    expect(content.classes()).toContain('provider-content')
+    expect(content.classes()).toContain('props-content')
+    expect(content.attributes('style')).toContain('border-bottom: 1px solid red')
+    expect(content.attributes('style')).toContain('background-color: rgb(200, 201, 202)')
     expect(wrapper.find('.ant-scrollbar-track-y').classes()).toContain('provider-track-y')
     expect(thumbY.classes()).toContain('props-thumb-y')
     expect(thumbY.attributes('style')).toContain('border-radius: 20px')
@@ -341,6 +410,21 @@ describe('Scrollbar', () => {
     expect(wrapper.find('.ant-scrollbar-track-x').exists()).toBe(true)
   })
 
+  it('renders track motion through transition props', async () => {
+    const wrapper = mount(Scrollbar, {
+      props: {
+        visibilityY: 'always',
+      },
+    })
+
+    await nextTick()
+
+    const transition = wrapper.find('transition-stub')
+
+    expect(transition.exists()).toBe(true)
+    expect(transition.attributes('name')).toBe('ant-scrollbar-track-motion')
+  })
+
   it('auto hides overlays after pointer leaves and shows them again on re-enter', async () => {
     vi.useFakeTimers()
 
@@ -415,6 +499,89 @@ describe('Scrollbar', () => {
     expect(styleText).toContain('.ant-scrollbar-native')
     expect(styleText).toContain('scrollbar-width:auto')
     expect(styleText).toContain('ms-overflow-style:auto')
+  })
+
+  it('updates tracks when content size changes without a scroll event', async () => {
+    const restoreResizeObserver = installResizeObserverMock()
+
+    try {
+      const wrapper = mount(Scrollbar, {
+        slots: {
+          default: () => h('div', { class: 'scroll-content' }, 'content'),
+        },
+      })
+
+      const container = wrapper.find('.ant-scrollbar-container')
+      mockScrollMetrics(container.element, {
+        clientHeight: 100,
+        scrollHeight: 100,
+        scrollTop: 0,
+        clientWidth: 100,
+        scrollWidth: 100,
+        scrollLeft: 0,
+      })
+
+      await container.trigger('scroll')
+      await nextTick()
+
+      expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(false)
+
+      const content = wrapper.find('.ant-scrollbar-content')
+      expect(content.exists()).toBe(true)
+
+      mockScrollMetrics(container.element, {
+        scrollHeight: 240,
+      })
+
+      TestResizeObserver.trigger(content.element)
+      await nextTick()
+
+      expect(wrapper.find('.ant-scrollbar-track-y').exists()).toBe(true)
+    }
+    finally {
+      restoreResizeObserver()
+    }
+  })
+
+  it('updates thumb size when container size changes without scrolling', async () => {
+    const restoreResizeObserver = installResizeObserverMock()
+
+    try {
+      const wrapper = mount(Scrollbar, {
+        props: {
+          visibilityY: 'always',
+        },
+      })
+
+      const container = wrapper.find('.ant-scrollbar-container')
+      mockScrollMetrics(container.element, {
+        clientHeight: 100,
+        scrollHeight: 300,
+        scrollTop: 0,
+        clientWidth: 100,
+        scrollWidth: 100,
+        scrollLeft: 0,
+      })
+
+      await container.trigger('scroll')
+      await nextTick()
+
+      const initialThumbHeight = Number.parseFloat((wrapper.find('.ant-scrollbar-thumb-y').element as HTMLElement).style.height)
+
+      mockScrollMetrics(container.element, {
+        clientHeight: 150,
+      })
+
+      TestResizeObserver.trigger(container.element)
+      await nextTick()
+
+      const nextThumbHeight = Number.parseFloat((wrapper.find('.ant-scrollbar-thumb-y').element as HTMLElement).style.height)
+
+      expect(nextThumbHeight).toBeGreaterThan(initialThumbHeight)
+    }
+    finally {
+      restoreResizeObserver()
+    }
   })
 
   it('updates scrollTop when dragging the vertical thumb', async () => {

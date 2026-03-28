@@ -9,6 +9,7 @@ const { t } = useComponentLocale(locales)
 const semantics = computed(() => [
   { name: 'root', desc: t('root'), version: '1.0.0' },
   { name: 'container', desc: t('container'), version: '1.0.0' },
+  { name: 'content', desc: t('content'), version: '1.0.0' },
   { name: 'track', desc: t('track'), version: '1.0.0' },
   { name: 'trackX', desc: t('trackX'), version: '1.0.0' },
   { name: 'trackY', desc: t('trackY'), version: '1.0.0' },
@@ -47,7 +48,7 @@ const semantics = computed(() => [
               style="display: grid; grid-template-columns: 120px 1fr 120px; gap: 12px; min-width: 600px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--ant-color-fill-secondary), transparent 12%);"
             >
               <strong>Block {{ index }}</strong>
-              <span>Observe semantic highlights for root, container, track, and thumbs.</span>
+              <span>Observe semantic highlights for root, container, content, track, and thumbs.</span>
               <a-tag :color="index % 2 === 0 ? 'success' : 'default'">
                 {{ index % 2 === 0 ? 'Visible' : 'Queued' }}
               </a-tag>

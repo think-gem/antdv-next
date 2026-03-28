@@ -2,9 +2,10 @@ import type { App, CSSProperties, ShallowRef, SlotsType } from 'vue'
 import type { SemanticClassNamesType, SemanticStylesType } from '../_util/semantic'
 import type { ScrollbarConfig, ScrollbarVisibility } from '../config-provider'
 import { clsx } from '@v-c/util'
+import { getTransitionProps } from '@v-c/util/dist/utils/transition'
 import { useBaseConfig } from 'antdv-next/config-provider/context'
 import useCSSVarCls from 'antdv-next/config-provider/hooks/useCSSVarCls'
-import { computed, defineComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, defineComponent, onBeforeUnmount, ref, shallowRef, Transition, watch } from 'vue'
 import { useMergeSemantic } from '../_util/semantic'
 import { useProComponentConfig } from '../config-provider'
 import { useScrollbarDrag } from './hooks/useScrollbarDrag'
@@ -16,6 +17,7 @@ export type ScrollbarSemanticName = keyof ScrollbarSemanticClassNames & keyof Sc
 export interface ScrollbarSemanticClassNames {
   root?: string
   container?: string
+  content?: string
   track?: string
   trackX?: string
   trackY?: string
@@ -27,6 +29,7 @@ export interface ScrollbarSemanticClassNames {
 export interface ScrollbarSemanticStyles {
   root?: CSSProperties
   container?: CSSProperties
+  content?: CSSProperties
   track?: CSSProperties
   trackX?: CSSProperties
   trackY?: CSSProperties
@@ -87,6 +90,7 @@ const Scrollbar = defineComponent<
     const { prefixCls, direction } = useBaseConfig('scrollbar', props)
     const proConfig = useProComponentConfig('scrollbar')
     const containerRef = shallowRef<HTMLElement>()
+    const contentRef = shallowRef<HTMLElement>()
     const rootCls = useCSSVarCls(prefixCls)
     const [hashId, cssVarCls] = useStyle(prefixCls, rootCls)
 
@@ -165,8 +169,12 @@ const Scrollbar = defineComponent<
       ]
     })
 
+    const trackMotionName = computed(() => `${prefixCls.value}-track-motion`)
+    const trackTransitionProps = computed(() => getTransitionProps(trackMotionName.value, { appear: false }))
+
     const scrollbarState = useScrollbarState(
       containerRef,
+      contentRef,
       computed(() => mergedConfig.value.visibilityX),
       computed(() => mergedConfig.value.visibilityY),
     )
@@ -309,6 +317,82 @@ const Scrollbar = defineComponent<
 
     expose(api)
 
+    const renderTrackY = () => (
+      <Transition {...trackTransitionProps.value}>
+        {{
+          default: () => (showTrackY.value
+            ? (
+                <div
+                  class={clsx(
+                    `${prefixCls.value}-track`,
+                    `${prefixCls.value}-track-y`,
+                    mergedClassNames.value.track,
+                    mergedClassNames.value.trackY,
+                  )}
+                  style={[mergedStyles.value.track, mergedStyles.value.trackY]}
+                >
+                  <div
+                    class={clsx(
+                      `${prefixCls.value}-thumb`,
+                      `${prefixCls.value}-thumb-y`,
+                      mergedClassNames.value.thumb,
+                      mergedClassNames.value.thumbY,
+                    )}
+                    style={[
+                      mergedStyles.value.thumb,
+                      mergedStyles.value.thumbY,
+                      {
+                        height: `${scrollbarState.thumbSizeY.value}px`,
+                        transform: `translateY(${scrollbarState.thumbOffsetY.value}px)`,
+                      },
+                    ]}
+                    onMousedown={scrollbarDrag.onThumbMouseDownY}
+                  />
+                </div>
+              )
+            : null),
+        }}
+      </Transition>
+    )
+
+    const renderTrackX = () => (
+      <Transition {...trackTransitionProps.value}>
+        {{
+          default: () => (showTrackX.value
+            ? (
+                <div
+                  class={clsx(
+                    `${prefixCls.value}-track`,
+                    `${prefixCls.value}-track-x`,
+                    mergedClassNames.value.track,
+                    mergedClassNames.value.trackX,
+                  )}
+                  style={[mergedStyles.value.track, mergedStyles.value.trackX]}
+                >
+                  <div
+                    class={clsx(
+                      `${prefixCls.value}-thumb`,
+                      `${prefixCls.value}-thumb-x`,
+                      mergedClassNames.value.thumb,
+                      mergedClassNames.value.thumbX,
+                    )}
+                    style={[
+                      mergedStyles.value.thumb,
+                      mergedStyles.value.thumbX,
+                      {
+                        width: `${scrollbarState.thumbSizeX.value}px`,
+                        transform: `translateX(${scrollbarState.thumbOffsetX.value}px)`,
+                      },
+                    ]}
+                    onMousedown={scrollbarDrag.onThumbMouseDownX}
+                  />
+                </div>
+              )
+            : null),
+        }}
+      </Transition>
+    )
+
     return () => (
       <div
         class={mergedClassName.value}
@@ -328,66 +412,16 @@ const Scrollbar = defineComponent<
           style={mergedStyles.value.container}
           onScroll={handleScroll}
         >
-          {slots.default?.()}
+          <div
+            ref={contentRef}
+            class={clsx(`${prefixCls.value}-content`, mergedClassNames.value.content)}
+            style={mergedStyles.value.content}
+          >
+            {slots.default?.()}
+          </div>
         </div>
-        {!mergedNative.value && showTrackY.value && (
-          <div
-            class={clsx(
-              `${prefixCls.value}-track`,
-              `${prefixCls.value}-track-y`,
-              mergedClassNames.value.track,
-              mergedClassNames.value.trackY,
-            )}
-            style={[mergedStyles.value.track, mergedStyles.value.trackY]}
-          >
-            <div
-              class={clsx(
-                `${prefixCls.value}-thumb`,
-                `${prefixCls.value}-thumb-y`,
-                mergedClassNames.value.thumb,
-                mergedClassNames.value.thumbY,
-              )}
-              style={[
-                mergedStyles.value.thumb,
-                mergedStyles.value.thumbY,
-                {
-                  height: `${scrollbarState.thumbSizeY.value}px`,
-                  transform: `translateY(${scrollbarState.thumbOffsetY.value}px)`,
-                },
-              ]}
-              onMousedown={scrollbarDrag.onThumbMouseDownY}
-            />
-          </div>
-        )}
-        {!mergedNative.value && showTrackX.value && (
-          <div
-            class={clsx(
-              `${prefixCls.value}-track`,
-              `${prefixCls.value}-track-x`,
-              mergedClassNames.value.track,
-              mergedClassNames.value.trackX,
-            )}
-            style={[mergedStyles.value.track, mergedStyles.value.trackX]}
-          >
-            <div
-              class={clsx(
-                `${prefixCls.value}-thumb`,
-                `${prefixCls.value}-thumb-x`,
-                mergedClassNames.value.thumb,
-                mergedClassNames.value.thumbX,
-              )}
-              style={[
-                mergedStyles.value.thumb,
-                mergedStyles.value.thumbX,
-                {
-                  width: `${scrollbarState.thumbSizeX.value}px`,
-                  transform: `translateX(${scrollbarState.thumbOffsetX.value}px)`,
-                },
-              ]}
-              onMousedown={scrollbarDrag.onThumbMouseDownX}
-            />
-          </div>
-        )}
+        {!mergedNative.value && renderTrackY()}
+        {!mergedNative.value && renderTrackX()}
       </div>
     )
   },
