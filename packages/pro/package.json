@@ -61,6 +61,7 @@
     "vue": ">=3.2.0"
   },
   "dependencies": {
+    "@antdv-next/icons": "catalog:prod",
     "antdv-next": "workspace:^"
   },
   "web-types": "web-types.json"

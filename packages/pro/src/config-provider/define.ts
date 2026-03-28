@@ -1,5 +1,6 @@
 import type { ThemeConfig } from 'antdv-next/config-provider/context'
 import type { CSSProperties } from 'vue'
+import type { CronPickerPreset } from '../cron-picker'
 
 export type ScrollbarVisibility = 'auto' | 'always' | 'hidden'
 
@@ -13,6 +14,13 @@ export interface ScrollbarConfig {
   style?: CSSProperties
   classes?: Record<string, string>
   styles?: Record<string, CSSProperties>
+}
+
+export interface CronPickerConfig {
+  previewCount?: number
+  presets?: CronPickerPreset[]
+  class?: string
+  style?: CSSProperties
 }
 
 export interface ProConfigProviderProps {
@@ -30,6 +38,7 @@ export interface ProConfigProviderProps {
   popupMatchSelectWidth?: boolean
   popupOverflow?: 'viewport' | 'scroll'
   scrollbar?: ScrollbarConfig
+  cronPicker?: CronPickerConfig
 }
 
 export interface ProConfigProviderSlots {

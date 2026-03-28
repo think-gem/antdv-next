@@ -5,10 +5,12 @@ import './theme/augment'
 export * from './components'
 export { default as ProConfigProvider } from './config-provider'
 export type {
+  CronPickerConfig,
   ProConfigProviderProps,
   ScrollbarConfig,
   ScrollbarVisibility,
 } from './config-provider'
+export type { CronPickerEmits, CronPickerPreset, CronPickerProps, CronPickerSlots } from './cron-picker'
 
 export default {
   install(app: App) {

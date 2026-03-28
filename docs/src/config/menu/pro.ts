@@ -38,4 +38,8 @@ export const proMenus: AntdvMenuItem[] = [
     key: '/pro/scrollbar',
     label: '/pro/scrollbar',
   },
+  {
+    key: '/pro/cron-picker',
+    label: '/pro/cron-picker',
+  },
 ]

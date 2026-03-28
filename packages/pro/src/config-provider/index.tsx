@@ -13,6 +13,7 @@ const ProConfigProvider = defineComponent<
   (props, { slots }) => {
     const proConfig = computed(() => ({
       scrollbar: props.scrollbar,
+      cronPicker: props.cronPicker,
     }))
 
     useProConfigProvider(proConfig)
@@ -49,6 +50,7 @@ const ProConfigProvider = defineComponent<
 export default ProConfigProvider
 export { useProComponentConfig, useProConfig, useProConfigProvider } from './context'
 export type {
+  CronPickerConfig,
   ProConfigProviderEmits,
   ProConfigProviderProps,
   ProConfigProviderSlots,

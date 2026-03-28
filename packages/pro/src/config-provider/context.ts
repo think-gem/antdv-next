@@ -1,9 +1,10 @@
 import type { ComputedRef, InjectionKey, Ref } from 'vue'
-import type { ScrollbarConfig } from './define'
+import type { CronPickerConfig, ScrollbarConfig } from './define'
 import { computed, inject, provide, ref } from 'vue'
 
 export interface ProConfigContextProps {
   scrollbar?: ScrollbarConfig
+  cronPicker?: CronPickerConfig
 }
 
 const EMPTY_OBJECT = {}
