@@ -313,6 +313,8 @@ export type FormConfig = ComponentStyleConfig
     | 'classes'
     | 'styles'
     | 'tooltip'
+    | 'autoComplete'
+    | 'autocomplete'
   >
 export type RadioConfig = ComponentStyleConfig & Pick<RadioProps, 'classes' | 'styles'>
 
